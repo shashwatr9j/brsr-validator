@@ -5,3 +5,774 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BRSR → ISSB S2 Data Quality Validator</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0c0f;--bg2:#111418;--bg3:#161b22;--bg4:#1c2230;
+  --border:#2a3040;--border2:#3a4460;
+  --text:#c8d4e8;--text2:#7a8fa8;--text3:#4a5a70;
+  --accent:#00d4aa;--accent2:#0099ff;--accent3:#ff6b35;
+  --red:#ff4040;--amber:#ffaa00;--green:#00cc88;
+  --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+}
+html,body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;min-height:100vh}
+a{color:var(--accent2)}
+
+/* ── TOPBAR ── */
+.topbar{background:var(--bg2);border-bottom:1px solid var(--border);padding:7px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.brand{font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:.15em}
+.topbar-right{display:flex;gap:18px;align-items:center}
+.sdot{width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:5px}
+.sdot.g{background:var(--green)}.sdot.a{background:var(--amber)}.sdot.r{background:var(--red)}
+.clock{font-family:var(--mono);font-size:11px;color:var(--text2)}
+.ts{font-family:var(--mono);font-size:10px;color:var(--text2)}
+
+/* ── NAV ── */
+.nav{background:var(--bg3);border-bottom:1px solid var(--border);display:flex;overflow-x:auto}
+.ntab{padding:9px 20px;font-family:var(--mono);font-size:10px;color:var(--text2);border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap;letter-spacing:.08em;text-transform:uppercase;border-right:1px solid var(--border)}
+.ntab.active{color:var(--accent);border-bottom-color:var(--accent);background:var(--bg2)}
+.ntab:hover:not(.active){color:var(--text);background:var(--bg4)}
+
+/* ── LAYOUT ── */
+.shell{display:grid;grid-template-columns:1fr 300px;min-height:calc(100vh - 72px)}
+.main{border-right:1px solid var(--border);overflow:hidden}
+.side{background:var(--bg2);overflow:hidden}
+.page{display:none;padding:16px}.page.active{display:block}
+
+/* ── PANELS ── */
+.panel{background:var(--bg2);border:1px solid var(--border);padding:14px 16px;margin-bottom:8px;border-radius:2px}
+.ph{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.pl{font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:.18em;text-transform:uppercase}
+
+/* ── BADGES ── */
+.badge{font-family:var(--mono);font-size:9px;padding:2px 8px;border-radius:2px;text-transform:uppercase;letter-spacing:.08em;display:inline-block}
+.br{background:rgba(255,64,64,.15);color:var(--red);border:1px solid rgba(255,64,64,.3)}
+.ba{background:rgba(255,170,0,.12);color:var(--amber);border:1px solid rgba(255,170,0,.3)}
+.bg{background:rgba(0,204,136,.12);color:var(--green);border:1px solid rgba(0,204,136,.25)}
+.bb{background:rgba(0,153,255,.1);color:var(--accent2);border:1px solid rgba(0,153,255,.2)}
+.bc{background:rgba(0,212,170,.1);color:var(--accent);border:1px solid rgba(0,212,170,.2)}
+
+/* ── METRICS ── */
+.mgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}
+.metric{background:var(--bg3);border:1px solid var(--border);padding:10px 12px;border-radius:2px}
+.ml{font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:.12em;text-transform:uppercase;margin-bottom:4px}
+.mv{font-family:var(--mono);font-size:20px;font-weight:600;line-height:1}
+.ms{font-size:9px;color:var(--text3);margin-top:3px}
+.mv.r{color:var(--red)}.mv.a{color:var(--amber)}.mv.g{color:var(--green)}.mv.c{color:var(--accent)}
+
+/* ── SCOPE GRID ── */
+.sgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px}
+.sc{background:var(--bg3);border:1px solid var(--border);padding:10px;border-radius:2px;text-align:center}
+.sc.ok{border-color:rgba(0,212,170,.3)}.sc.bad{border-color:rgba(255,64,64,.3);background:rgba(255,64,64,.04)}
+.sc.part{border-color:rgba(255,170,0,.3)}
+.scat{font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.sval{font-family:var(--mono);font-size:14px;font-weight:600}
+.ok .sval{color:var(--accent)}.bad .sval{color:var(--red)}.part .sval{color:var(--amber)}
+.sunit{font-size:9px;color:var(--text3);margin-top:2px}
+
+/* ── FLAGS ── */
+.flags{display:flex;flex-direction:column;gap:6px}
+.flag{border-left:3px solid;padding:8px 10px;border-radius:0 2px 2px 0;font-size:10px;background:var(--bg3)}
+.flag.cr{border-color:var(--red)}.flag.hi{border-color:var(--amber)}.flag.md{border-color:var(--accent2)}
+.fc{font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:.08em;margin-bottom:2px}
+.cr .fc{color:var(--red)}.hi .fc{color:var(--amber)}.md .fc{color:var(--accent2)}
+.fd{color:var(--text2);line-height:1.5}
+
+/* ── TABLE ── */
+.tbl{width:100%;border-collapse:collapse;font-size:10px}
+.tbl th{font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:.12em;text-transform:uppercase;padding:6px 8px;border-bottom:1px solid var(--border);font-weight:400;text-align:left}
+.tbl td{padding:7px 8px;border-bottom:1px solid rgba(42,48,64,.5);font-family:var(--mono);font-size:10px;vertical-align:middle}
+.tbl tr:hover td{background:var(--bg4)}
+.tbl tr.sel td{background:rgba(0,212,170,.04);border-left:2px solid var(--accent)}
+.tag{font-family:var(--mono);font-size:9px;padding:2px 6px;border-radius:2px;display:inline-block}
+.tr{background:rgba(255,64,64,.12);color:var(--red);border:1px solid rgba(255,64,64,.2)}
+.ta{background:rgba(255,170,0,.1);color:var(--amber);border:1px solid rgba(255,170,0,.15)}
+.tg{background:rgba(0,204,136,.1);color:var(--green);border:1px solid rgba(0,204,136,.15)}
+.tb{background:rgba(0,153,255,.08);color:var(--accent2);border:1px solid rgba(0,153,255,.12)}
+.spill{display:inline-block;padding:2px 8px;border-radius:2px;font-size:9px;font-weight:600}
+.sp-r{background:rgba(255,64,64,.2);color:var(--red)}
+.sp-a{background:rgba(255,170,0,.15);color:var(--amber)}
+.sp-g{background:rgba(0,204,136,.15);color:var(--green)}
+
+/* ── FORM ELEMENTS ── */
+textarea,input[type=text]{background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:10px;padding:8px 10px;border-radius:2px;width:100%}
+textarea:focus,input[type=text]:focus{outline:none;border-color:var(--accent2)}
+select{background:var(--bg3);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:10px;padding:5px 8px;border-radius:2px;cursor:pointer}
+select:focus{outline:none;border-color:var(--accent2)}
+.btn{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:7px 14px;border:1px solid;border-radius:2px;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
+.btn-p{background:rgba(0,212,170,.12);color:var(--accent);border-color:rgba(0,212,170,.35)}
+.btn-p:hover{background:rgba(0,212,170,.22)}
+.btn-p:disabled{opacity:.4;cursor:not-allowed}
+.btn-n{background:var(--bg3);color:var(--text2);border-color:var(--border)}
+.btn-n:hover{background:var(--bg4)}
+.btn-b{background:rgba(0,153,255,.08);color:var(--accent2);border-color:rgba(0,153,255,.2)}
+.btn-b:hover{background:rgba(0,153,255,.15)}
+.btn-d{background:rgba(255,64,64,.08);color:var(--red);border-color:rgba(255,64,64,.2)}
+
+/* ── TERMINAL ── */
+.term{background:var(--bg);border:1px solid var(--border);border-radius:2px;padding:12px 14px;font-family:var(--mono);font-size:10px;line-height:1.9;color:var(--text2);min-height:80px;max-height:280px;overflow-y:auto;white-space:pre-wrap}
+.term .ok{color:var(--green)}.term .wa{color:var(--amber)}.term .er{color:var(--red)}.term .ac{color:var(--accent)}.term .in{color:var(--accent2)}
+.cursor{display:inline-block;width:7px;height:11px;background:var(--accent);animation:blink .9s steps(1) infinite;vertical-align:middle}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+
+/* ── PROGRESS ── */
+.prow{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:10px;font-family:var(--mono)}
+.ptrack{flex:1;background:var(--bg);height:5px;border-radius:2px;overflow:hidden}
+.pfill{height:100%;border-radius:2px}
+
+/* ── GAUGE ── */
+.gauge-wrap{display:flex;justify-content:center;padding:6px 0}
+.bd-row{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(42,48,64,.5);font-size:10px;font-family:var(--mono)}
+.bd-row:last-child{border-bottom:none}
+
+/* ── CREDIT TIERS ── */
+.tier{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:2px;font-size:10px;font-family:var(--mono);margin-bottom:4px}
+.t1{background:rgba(0,204,136,.08);border:1px solid rgba(0,204,136,.18)}
+.t2{background:rgba(0,153,255,.06);border:1px solid rgba(0,153,255,.12)}
+.t3{background:rgba(255,170,0,.06);border:1px solid rgba(255,170,0,.12)}
+.t4{background:rgba(255,107,53,.06);border:1px solid rgba(255,107,53,.12)}
+.t5{background:rgba(255,64,64,.08);border:1px solid rgba(255,64,64,.18)}
+.ttrack{flex:1;background:var(--bg);height:4px;border-radius:2px;overflow:hidden;max-width:80px}
+.tbar{height:100%;border-radius:2px}
+
+/* ── HEURISTICS ── */
+.heur{display:flex;align-items:flex-start;gap:8px;padding:7px 10px;border-radius:2px;font-size:10px;margin-bottom:4px}
+.heur.on{background:rgba(255,64,64,.06);border:1px solid rgba(255,64,64,.18)}
+.heur.off{background:var(--bg3);border:1px solid var(--border)}
+.hicon{width:14px;height:14px;border-radius:50%;flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700}
+.heur.on .hicon{background:rgba(255,64,64,.25);color:var(--red)}
+.heur.off .hicon{background:rgba(0,204,136,.2);color:var(--green)}
+.htxt{color:var(--text2);line-height:1.5;font-family:var(--mono);font-size:10px}
+.heur.on .htxt{color:var(--text)}
+
+/* ── REPORT ── */
+.rsec{background:var(--bg3);border:1px solid var(--border);border-radius:2px;padding:9px 12px;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;font-family:var(--mono);font-size:10px}
+.chk{width:14px;height:14px;border:1px solid var(--border2);border-radius:2px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:9px;flex-shrink:0}
+.chk.on{background:rgba(0,212,170,.2);border-color:var(--accent);color:var(--accent)}
+
+/* ── SIDE PANEL ── */
+.side-panel{padding:14px 14px;border-bottom:1px solid var(--border)}
+
+/* ── RISK BARS ── */
+.rbar{display:flex;align-items:center;gap:8px;font-size:10px;font-family:var(--mono);margin-bottom:6px}
+.rtrack{flex:1;background:var(--bg);height:4px;border-radius:2px;overflow:hidden}
+.rfill{height:100%;border-radius:2px}
+
+/* ── SPINNER ── */
+.spin{width:11px;height:11px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:sp .7s linear infinite;display:inline-block}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* ── FOOTER ── */
+.foot{background:var(--bg2);border-top:1px solid var(--border);padding:7px 20px;display:flex;align-items:center;justify-content:space-between}
+.foot-l{font-family:var(--mono);font-size:9px;color:var(--text3)}
+.foot-r{display:flex;gap:16px}
+
+/* ── DROP ZONE ── */
+.dz{border:1px dashed var(--border2);border-radius:2px;padding:18px;text-align:center;cursor:pointer;transition:all .2s}
+.dz:hover,.dz.over{border-color:var(--accent);background:rgba(0,212,170,.04)}
+.dz-txt{font-family:var(--mono);font-size:10px;color:var(--text2);line-height:1.7}
+
+/* ── WATERMARK ── */
+.wm{font-family:var(--mono);font-size:8px;color:var(--text3);letter-spacing:.1em;margin-top:5px}
+
+/* ── CONF PIPS ── */
+.pips{display:flex;gap:2px;align-items:center}
+.pip{width:5px;height:10px;border-radius:1px}
+.pip.hi{background:var(--green)}.pip.me{background:var(--amber)}.pip.lo{background:var(--red)}.pip.em{background:var(--border)}
+
+/* scrollbars */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:var(--bg2)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+@media(max-width:900px){
+  .shell{grid-template-columns:1fr}
+  .side{display:none}
+  .mgrid{grid-template-columns:repeat(2,1fr)}
+  .sgrid{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <span class="brand">▶ BRSR→ISSB S2 · Data Quality Validator</span>
+  <div class="topbar-right">
+    <span class="ts"><span class="sdot r"></span><span id="ename">AWAITING DATA</span></span>
+    <span class="ts"><span class="sdot a"></span>SECTOR: <span id="slabel" style="color:var(--amber)">UNCLASSIFIED</span></span>
+    <span class="clock" id="clock">--:--:-- IST</span>
+  </div>
+</div>
+
+<!-- NAV -->
+<div class="nav">
+  <div class="ntab active" onclick="goTab('overview')">Overview</div>
+  <div class="ntab" onclick="goTab('ingest')">Data Ingestion</div>
+  <div class="ntab" onclick="goTab('mapping')">ISSB S2 Mapping</div>
+  <div class="ntab" onclick="goTab('carbon')">Carbon Quality</div>
+  <div class="ntab" onclick="goTab('flags')">Risk Flags</div>
+  <div class="ntab" onclick="goTab('trends')">Trends</div>
+  <div class="ntab" onclick="goTab('peers')">Peer Screener</div>
+  <div class="ntab" onclick="goTab('report')">Report</div>
+</div>
+
+<div class="shell">
+<div class="main">
+
+<!-- OVERVIEW -->
+<div class="page active" id="page-overview">
+  <div class="panel">
+    <div class="ph"><span class="pl">Assurance Readiness Assessment</span><span class="badge br" id="rb">HIGH RISK</span></div>
+    <div class="mgrid">
+      <div class="metric"><div class="ml">Readiness Score</div><div class="mv a" id="sd">42</div><div class="ms">/ 100 · HIGH RISK</div></div>
+      <div class="metric"><div class="ml">Critical Flags</div><div class="mv r" id="cf">4</div><div class="ms">require remediation</div></div>
+      <div class="metric"><div class="ml">Scope 3 Coverage</div><div class="mv a" id="s3c">31%</div><div class="ms">of applicable cats.</div></div>
+      <div class="metric"><div class="ml">Greenwash Heuristics</div><div class="mv r" id="gwc">3/6</div><div class="ms">triggered</div></div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="ph"><span class="pl">Scope Emissions Coverage</span><span class="badge ba">PARTIAL DISCLOSURE</span></div>
+    <div class="sgrid">
+      <div class="sc ok"><div class="scat">Scope 1</div><div class="sval" id="s1v">142,850</div><div class="sunit">MT CO₂e · Limited Assured</div></div>
+      <div class="sc ok"><div class="scat">Scope 2 Market</div><div class="sval" id="s2v">89,200</div><div class="sunit">MT CO₂e · Assured</div></div>
+      <div class="sc bad"><div class="scat">Scope 3 Cat 11</div><div class="sval" id="s3v">ABSENT</div><div class="sunit">No method · CRITICAL</div></div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="ph"><span class="pl">Active Risk Flags</span><span class="badge br">4 CRITICAL · 2 HIGH</span></div>
+    <div class="flags">
+      <div class="flag cr"><div class="fc">MATERIALITY_GAP_CRITICAL — S3 CAT 11</div><div class="fd">Scope 3 Category 11 (Use of Sold Products) absent. Mandatory for steel sector under ISSB S2 para 29(c). Downstream emissions est. 4–8× Scope 1+2.</div></div>
+      <div class="flag cr"><div class="fc">NET_ZERO_INTEGRITY_RISK</div><div class="fd">Net Zero claim detected. 68% offset volume = REDD+ avoidance credits (Tier 4). Exceeds 40% threshold. Score penalty: −25 pts.</div></div>
+      <div class="flag cr"><div class="fc">BASELINE_INTEGRITY_FAILURE</div><div class="fd">FY2020 base year selected — COVID-19 production trough, 31% below 5yr average. Cherry-picking heuristic triggered.</div></div>
+      <div class="flag hi"><div class="fc">LEAKAGE_UNQUANTIFIED</div><div class="fd">REDD+ credit registry IDs absent. Geographic leakage assessment unavailable. Maximum leakage risk assigned.</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- INGEST -->
+<div class="page" id="page-ingest">
+  <div class="panel">
+    <div class="ph"><span class="pl">Raw BRSR Data Ingestion</span>
+      <select id="ssel" onchange="updSector()">
+        <option value="steel">Brown Sector: Steel</option>
+        <option value="power">Brown Sector: Power</option>
+        <option value="cement">Brown Sector: Cement</option>
+      </select>
+    </div>
+    <div class="dz" id="dz" ondragover="dzOver(event)" ondrop="dzDrop(event)" ondragleave="dzLeave()" onclick="document.getElementById('file-in').click()">
+      <div style="font-size:20px;color:var(--text3);margin-bottom:6px">⬇</div>
+      <div class="dz-txt"><strong style="color:var(--accent)">Drop BRSR JSON here</strong> or click to upload<br><span style="color:var(--text3)">Accepts .json · raw BRSR Core fields</span></div>
+      <input type="file" id="file-in" accept=".json" style="display:none" onchange="readFile(event)">
+    </div>
+    <div style="margin-top:10px">
+      <textarea id="jin" rows="14" placeholder='{"entity":"...","scope1_mtco2e":0,"scope2_market_mtco2e":0,"scope3_disclosed":false,...}'></textarea>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+      <button class="btn btn-p" onclick="runVal()">▶ RUN VALIDATION</button>
+      <button class="btn btn-n" onclick="loadSample()">LOAD SAMPLE</button>
+      <button class="btn btn-d" onclick="clearAll()">CLEAR</button>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="ph"><span class="pl">BRSR Field Inventory</span><span class="badge ba" id="fi-badge">23/41 FIELDS POPULATED</span></div>
+    <table class="tbl">
+      <thead><tr><th>BRSR Section</th><th>Field</th><th>Status</th><th>ISSB Req.</th></tr></thead>
+      <tbody>
+        <tr><td style="color:var(--text2)">P6 / Essential</td><td>Scope 1 GHG</td><td><span class="tag tg">PRESENT</span></td><td>S2-29(a)</td></tr>
+        <tr><td style="color:var(--text2)">P6 / Essential</td><td>Scope 2 GHG (mkt)</td><td><span class="tag tg">PRESENT</span></td><td>S2-29(b)</td></tr>
+        <tr><td style="color:var(--text2)">P6 / Essential</td><td>Scope 3 – Cat 11</td><td><span class="tag tr">ABSENT</span></td><td>S2-29(c)</td></tr>
+        <tr><td style="color:var(--text2)">P6 / Essential</td><td>Scope 3 – Cat 15</td><td><span class="tag tr">ABSENT</span></td><td>S2-29(c)</td></tr>
+        <tr><td style="color:var(--text2)">BRSR Core</td><td>GHG Intensity</td><td><span class="tag ta">PARTIAL</span></td><td>S2-29(d)</td></tr>
+        <tr><td style="color:var(--text2)">BRSR Core</td><td>Climate Risk Governance</td><td><span class="tag ta">PARTIAL</span></td><td>S2-10–22</td></tr>
+        <tr><td style="color:var(--text2)">BRSR Core</td><td>Transition Plan</td><td><span class="tag tr">ABSENT</span></td><td>S2-33</td></tr>
+        <tr><td style="color:var(--text2)">Leadership</td><td>Offset Registry IDs</td><td><span class="tag tr">ABSENT</span></td><td>VCMI</td></tr>
+        <tr><td style="color:var(--text2)">SEBI</td><td>Assurance Statement</td><td><span class="tag ta">LIMITED</span></td><td>ISAE 3410</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- MAPPING -->
+<div class="page" id="page-mapping">
+  <div class="panel">
+    <div class="ph"><span class="pl">BRSR → ISSB S2 Pillar Mapping</span><span class="badge bb">INTEROPERABILITY ANALYSIS</span></div>
+    <table class="tbl">
+      <thead><tr><th>BRSR Source</th><th>ISSB S2 Pillar</th><th>Gap Type</th><th>Confidence</th><th>Materiality</th></tr></thead>
+      <tbody>
+        <tr><td>P6 / Scope 1<br><span style="color:var(--text3)">142,850 MT CO₂e</span></td><td>S2 para 29(a)</td><td><span class="tag tg">NO GAP</span></td><td><div class="pips" id="p1"></div></td><td><span class="tag tr">HIGH</span></td></tr>
+        <tr><td>P6 / Scope 2<br><span style="color:var(--text3)">89,200 MT CO₂e</span></td><td>S2 para 29(b)</td><td><span class="tag tg">NO GAP</span></td><td><div class="pips" id="p2"></div></td><td><span class="tag tr">HIGH</span></td></tr>
+        <tr><td>Scope 3 Cat 11<br><span style="color:var(--red)">ABSENT</span></td><td>S2 para 29(c)</td><td><span class="tag tr">CRITICAL GAP</span></td><td><div class="pips" id="p3"></div></td><td><span class="tag tr">CRITICAL</span></td></tr>
+        <tr><td>Scope 3 Cat 15<br><span style="color:var(--red)">NOT REPORTED</span></td><td>S2 para 29(c)</td><td><span class="tag tr">CRITICAL GAP</span></td><td><div class="pips" id="p4"></div></td><td><span class="tag tr">CRITICAL</span></td></tr>
+        <tr><td>GHG Intensity<br><span style="color:var(--amber)">No boundary</span></td><td>S2 para 29(d)</td><td><span class="tag ta">PARTIAL GAP</span></td><td><div class="pips" id="p5"></div></td><td><span class="tag ta">HIGH</span></td></tr>
+        <tr><td>Climate Risk<br><span style="color:var(--amber)">Board only</span></td><td>S2 para 10–22</td><td><span class="tag ta">SIGNIFICANT GAP</span></td><td><div class="pips" id="p6"></div></td><td><span class="tag ta">HIGH</span></td></tr>
+        <tr><td>ESG Targets<br><span style="color:var(--amber)">No milestones</span></td><td>S2 para 33</td><td><span class="tag ta">AMBIGUITY</span></td><td><div class="pips" id="p7"></div></td><td><span class="tag tr">HIGH</span></td></tr>
+        <tr><td>Transition Plan<br><span style="color:var(--red)">ABSENT</span></td><td>S2 para 14–16</td><td><span class="tag tr">CRITICAL GAP</span></td><td><div class="pips" id="p8"></div></td><td><span class="tag tr">CRITICAL</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="panel">
+    <div class="ph"><span class="pl">Methodological Transparency Audit</span><span class="badge br">FAILS INSTITUTIONAL THRESHOLD</span></div>
+    <div class="flags">
+      <div class="flag hi"><div class="fc">GHG_PROTOCOL_ALIGNMENT · MEDIUM CONFIDENCE</div><div class="fd">Consolidation approach (operational vs equity share) not disclosed. Boundary definition affects Scope 1 by est. ±18%.</div></div>
+      <div class="flag cr"><div class="fc">SCOPE3_METHODOLOGY_ABSENT</div><div class="fd">No Category 11 calculation methodology. Spend-based, hybrid, or product-specific? ISSB S2 para 29(c) non-compliant.</div></div>
+      <div class="flag hi"><div class="fc">ASSURANCE_SCOPE_MISMATCH</div><div class="fd">Limited assurance on Scope 1+2 only. Scope 3 entirely unassured. ISSB S2 readiness requires min. limited assurance on all disclosed scopes.</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- CARBON -->
+<div class="page" id="page-carbon">
+  <div class="panel">
+    <div class="ph"><span class="pl">Carbon Credit Quality Assessment</span><span class="badge br">NET_ZERO_INTEGRITY_RISK</span></div>
+    <div style="background:rgba(255,64,64,.06);border:1px solid rgba(255,64,64,.2);border-radius:2px;padding:9px 12px;margin-bottom:12px;font-family:var(--mono);font-size:10px">
+      <span style="color:var(--red);font-weight:600">▲ CRITICAL</span>
+      <span style="color:var(--text2);margin-left:8px">68% offset volume = REDD+ Tier 4 avoidance. Exceeds 40% threshold. Net Zero integrity: <span style="color:var(--red);font-weight:600">COMPROMISED</span></span>
+    </div>
+    <div class="tier t5"><span style="color:var(--red);width:40px;font-weight:600">TIER 5</span><span style="color:var(--text2);flex:1">RECs / Avoidance Only</span><div class="ttrack"><div class="tbar" style="width:0%;background:var(--red)"></div></div><span style="color:var(--red);width:36px;text-align:right">0%</span></div>
+    <div class="tier t4"><span style="color:var(--accent3);width:40px;font-weight:600">TIER 4</span><span style="color:var(--text2);flex:1">REDD+ Avoided Deforestation ⚠</span><div class="ttrack"><div class="tbar" style="width:68%;background:var(--accent3)"></div></div><span style="color:var(--accent3);width:36px;text-align:right">68%</span></div>
+    <div class="tier t3"><span style="color:var(--amber);width:40px;font-weight:600">TIER 3</span><span style="color:var(--text2);flex:1">IFM / Improved Forest Mgmt</span><div class="ttrack"><div class="tbar" style="width:22%;background:var(--amber)"></div></div><span style="color:var(--amber);width:36px;text-align:right">22%</span></div>
+    <div class="tier t2"><span style="color:var(--accent2);width:40px;font-weight:600">TIER 2</span><span style="color:var(--text2);flex:1">Biochar / Medium Durability</span><div class="ttrack"><div class="tbar" style="width:0%;background:var(--accent2)"></div></div><span style="color:var(--accent2);width:36px;text-align:right">0%</span></div>
+    <div class="tier t1"><span style="color:var(--green);width:40px;font-weight:600">TIER 1</span><span style="color:var(--text2);flex:1">DAC + Storage / Engineered Removal</span><div class="ttrack"><div class="tbar" style="width:10%;background:var(--green)"></div></div><span style="color:var(--green);width:36px;text-align:right">10%</span></div>
+    <div style="height:1px;background:var(--border);margin:12px 0"></div>
+    <div class="flags">
+      <div class="flag cr"><div class="fc">LEAKAGE_UNQUANTIFIED · REDD+ PORTFOLIO</div><div class="fd">No registry IDs, vintage years, or project locations for REDD+ credits (68%). Leakage risk cannot be bounded. Methodological Transparency: FAILED.</div></div>
+      <div class="flag cr"><div class="fc">ADDITIONALITY_QUESTIONABLE</div><div class="fd">Two of three REDD+ projects in regions with pre-existing legal protection. Baseline additionality not demonstrated.</div></div>
+      <div class="flag hi"><div class="fc">PERMANENCE_RISK · NON-ENGINEERED REMOVALS</div><div class="fd">IFM buffer pool not disclosed. SBS allocation: 0%. High-durability engineered removals critically underweighted.</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- FLAGS -->
+<div class="page" id="page-flags">
+  <div class="panel">
+    <div class="ph"><span class="pl">Greenwashing Detection Heuristics</span><span class="badge br">ELEVATED RISK — 3/6 TRIGGERED</span></div>
+    <div class="heur on"><div class="hicon">✕</div><div><div style="font-family:var(--mono);font-size:9px;color:var(--red);letter-spacing:.08em;margin-bottom:3px">CHERRY-PICKING BASE YEAR</div><div class="htxt">FY2020 selected — COVID-19 trough, 31% below 5yr avg. Artificial abatement trajectory.</div></div></div>
+    <div class="heur on"><div class="hicon">✕</div><div><div style="font-family:var(--mono);font-size:9px;color:var(--red);letter-spacing:.08em;margin-bottom:3px">SCOPE 3 AVOIDANCE</div><div class="htxt">Detailed S1+S2 with zero Cat 11 in steel. Downstream emissions likely exceed all reported figures combined.</div></div></div>
+    <div class="heur on"><div class="hicon">✕</div><div><div style="font-family:var(--mono);font-size:9px;color:var(--red);letter-spacing:.08em;margin-bottom:3px">CREDIT QUALITY OPACITY</div><div class="htxt">No registry IDs, project locations, or vintage years for REDD+ tranche. Institutional verification impossible.</div></div></div>
+    <div class="heur off"><div class="hicon">✓</div><div><div style="font-family:var(--mono);font-size:9px;color:var(--green);letter-spacing:.08em;margin-bottom:3px">INTENSITY LAUNDERING</div><div class="htxt">No evidence of metric substitution in available disclosures. Absolute emissions reported for S1+S2.</div></div></div>
+    <div class="heur off"><div class="hicon">✓</div><div><div style="font-family:var(--mono);font-size:9px;color:var(--green);letter-spacing:.08em;margin-bottom:3px">TARGET QUALIFICATION CREEP</div><div class="htxt">Consistent "net zero by 2050" terminology across available filings. No regression detected.</div></div></div>
+    <div class="heur off"><div class="hicon">✓</div><div><div style="font-family:var(--mono);font-size:9px;color:var(--green);letter-spacing:.08em;margin-bottom:3px">OFFSETTING AS PRIMARY STRATEGY</div><div class="htxt">Capex allocation to internal abatement marginally exceeds offset spend. Flag may re-trigger upon full disclosure.</div></div></div>
+  </div>
+  <div class="panel">
+    <div class="ph"><span class="pl">Full Risk Flag Register</span><span style="font-family:var(--mono);font-size:9px;color:var(--text2)">8 FLAGS · 4 CRITICAL · 3 HIGH · 1 MEDIUM</span></div>
+    <div class="flags">
+      <div class="flag cr"><div class="fc">MATERIALITY_GAP_CRITICAL · S3-CAT11</div><div class="fd">Use of Sold Products absent. Steel sector primary value-chain risk. −10 pts.</div></div>
+      <div class="flag cr"><div class="fc">MATERIALITY_GAP_CRITICAL · S3-CAT15</div><div class="fd">Financed emissions not reported. JV exposure unquantified. −10 pts.</div></div>
+      <div class="flag cr"><div class="fc">NET_ZERO_INTEGRITY_RISK</div><div class="fd">68% avoidance credit reliance. High-durability removals at 10%. −25 pts.</div></div>
+      <div class="flag cr"><div class="fc">BASELINE_INTEGRITY_FAILURE</div><div class="fd">COVID-19 trough base year. Unassured historical baseline. −15 pts.</div></div>
+      <div class="flag hi"><div class="fc">LEAKAGE_UNQUANTIFIED</div><div class="fd">REDD+ registry data absent. Maximum leakage assigned. −10 pts.</div></div>
+      <div class="flag hi"><div class="fc">ASSURANCE_SCOPE_MISMATCH</div><div class="fd">Limited vs Reasonable required. Scope 3 unassured. −15 pts aggregate.</div></div>
+      <div class="flag hi"><div class="fc">TCFD_MISALIGNMENT</div><div class="fd">Physical risk scenario analysis absent. No 1.5°C/2°C/4°C modelling.</div></div>
+      <div class="flag md"><div class="fc">AMBIGUITY_FLAG · TARGETS</div><div class="fd">Net Zero 2050 lacks 2030 interim milestone. SBTi validation absent.</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- TRENDS -->
+<div class="page" id="page-trends">
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px">
+    <div class="metric"><div class="ml">FY24 Abs. Emissions</div><div class="mv a">232K</div><div class="ms">MT CO₂e · S1+S2</div></div>
+    <div class="metric"><div class="ml">YoY Change</div><div class="mv r">+8.4%</div><div class="ms">vs. FY23 · Rising</div></div>
+    <div class="metric"><div class="ml">Intensity Index</div><div class="mv g">−3.1%</div><div class="ms">FY24 vs FY23 · <span style="color:var(--amber)">ABS RISING</span></div></div>
+  </div>
+  <div class="panel">
+    <div class="ph"><span class="pl">Multi-year emissions trajectory</span><span class="badge ba">INTENSITY LAUNDERING RISK</span></div>
+    <div style="display:flex;gap:14px;margin-bottom:8px;flex-wrap:wrap">
+      <span style="display:flex;align-items:center;gap:5px;font-size:10px;font-family:var(--mono);color:var(--text2)"><span style="width:18px;height:2px;background:#ff4040;display:inline-block"></span>Scope 1</span>
+      <span style="display:flex;align-items:center;gap:5px;font-size:10px;font-family:var(--mono);color:var(--text2)"><span style="width:18px;height:2px;background:#0099ff;display:inline-block"></span>Scope 2</span>
+      <span style="display:flex;align-items:center;gap:5px;font-size:10px;font-family:var(--mono);color:var(--text2)"><span style="width:18px;height:2px;background:#00cc88;display:inline-block"></span>Intensity Index (right axis)</span>
+    </div>
+    <div style="position:relative;height:220px">
+      <canvas id="trend-chart" role="img" aria-label="Multi-year emissions trend FY20-FY24">S1 rising 110k to 143k. S2 rising 68k to 89k. Intensity declining.</canvas>
+    </div>
+    <div style="margin-top:8px;background:rgba(255,170,0,.05);border:1px solid rgba(255,170,0,.18);border-radius:2px;padding:8px 10px;font-family:var(--mono);font-size:10px">
+      <span style="color:var(--amber)">▲ INTENSITY LAUNDERING:</span>
+      <span style="color:var(--text2);margin-left:6px">Absolute S1+S2 grew +31% vs FY2020 base while intensity fell −12.3%. Net Zero narrative relies on intensity metric. Flag: <span style="color:var(--red)">TRIGGERED</span></span>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+    <div class="panel">
+      <div class="pl" style="margin-bottom:10px">Boundary Consistency Audit</div>
+      <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(42,48,64,.5);font-size:10px;font-family:var(--mono)"><span style="color:var(--text2)">FY20</span><span class="tag ta">UNDISCLOSED</span></div>
+      <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(42,48,64,.5);font-size:10px;font-family:var(--mono)"><span style="color:var(--text2)">FY21</span><span class="tag ta">EQUITY SHARE</span></div>
+      <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(42,48,64,.5);font-size:10px;font-family:var(--mono)"><span style="color:var(--text2)">FY22</span><span class="tag tr">NOT RESTATED</span></div>
+      <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(42,48,64,.5);font-size:10px;font-family:var(--mono)"><span style="color:var(--text2)">FY23</span><span class="tag ta">OPERATIONAL</span></div>
+      <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:10px;font-family:var(--mono)"><span style="color:var(--text2)">FY24</span><span class="tag ta">OPERATIONAL</span></div>
+      <div style="margin-top:8px;font-family:var(--mono);font-size:10px;color:var(--red)">BOUNDARY_INCONSISTENCY · FY21→22 unrestated</div>
+    </div>
+    <div class="panel">
+      <div class="pl" style="margin-bottom:10px">Assurance Coverage by Year</div>
+      <div class="prow"><span style="width:34px;color:var(--text3)">FY20</span><div class="ptrack"><div class="pfill" style="width:0%;background:var(--red)"></div></div><span style="color:var(--red);width:80px;text-align:right;font-size:9px">NONE</span></div>
+      <div class="prow"><span style="width:34px;color:var(--text3)">FY21</span><div class="ptrack"><div class="pfill" style="width:0%;background:var(--red)"></div></div><span style="color:var(--red);width:80px;text-align:right;font-size:9px">NONE</span></div>
+      <div class="prow"><span style="width:34px;color:var(--text3)">FY22</span><div class="ptrack"><div class="pfill" style="width:40%;background:var(--amber)"></div></div><span style="color:var(--amber);width:80px;text-align:right;font-size:9px">LTD S1</span></div>
+      <div class="prow"><span style="width:34px;color:var(--text3)">FY23</span><div class="ptrack"><div class="pfill" style="width:55%;background:var(--amber)"></div></div><span style="color:var(--amber);width:80px;text-align:right;font-size:9px">LTD S1+S2</span></div>
+      <div class="prow"><span style="width:34px;color:var(--text3)">FY24</span><div class="ptrack"><div class="pfill" style="width:55%;background:var(--amber)"></div></div><span style="color:var(--amber);width:80px;text-align:right;font-size:9px">LTD S1+S2</span></div>
+      <div style="margin-top:8px;font-family:var(--mono);font-size:10px;color:var(--text2)">No year achieves <span style="color:var(--green)">REASONABLE</span> assurance.</div>
+    </div>
+  </div>
+</div>
+
+<!-- PEERS -->
+<div class="page" id="page-peers">
+  <div class="panel">
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+      <span class="pl" style="margin-bottom:0">Sector Universe</span>
+      <select id="psec" onchange="renderPeers()"><option value="all">All Brown Sectors</option><option value="steel">Steel</option><option value="power">Power</option><option value="cement">Cement</option></select>
+      <select id="psort" onchange="renderPeers()"><option value="score">Sort: Score</option><option value="s3cov">Sort: S3 Coverage</option><option value="greenwash">Sort: Greenwash</option></select>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="tbl" style="table-layout:fixed;width:100%;min-width:580px">
+        <colgroup><col style="width:130px"><col style="width:55px"><col style="width:55px"><col style="width:70px"><col style="width:80px"><col style="width:60px"><col style="width:80px"><col style="width:80px"></colgroup>
+        <thead><tr><th>Entity</th><th>Sector</th><th>Score</th><th>S3 Cov.</th><th>Assurance</th><th>SBTi</th><th>Greenwash</th><th>Status</th></tr></thead>
+        <tbody id="ptbody"></tbody>
+      </table>
+    </div>
+    <div style="margin-top:8px;font-family:var(--mono);font-size:9px;color:var(--text3)"><span id="pcnt">12 entities</span> · Selected: <span style="color:var(--amber)">Bharat Steel Ltd.</span></div>
+  </div>
+</div>
+
+<!-- REPORT -->
+<div class="page" id="page-report">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+    <div class="panel">
+      <div class="pl" style="margin-bottom:10px">Report Configuration</div>
+      <div style="margin-bottom:10px">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:.1em;margin-bottom:6px">OUTPUT FORMAT</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-b" id="fb-pdf" onclick="setFmt('pdf')" style="font-size:9px;padding:5px 10px">PDF MEMO</button>
+          <button class="btn btn-n" id="fb-json" onclick="setFmt('json')" style="font-size:9px;padding:5px 10px">JSON</button>
+          <button class="btn btn-n" id="fb-csv" onclick="setFmt('csv')" style="font-size:9px;padding:5px 10px">CSV FLAGS</button>
+        </div>
+      </div>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:.1em;margin-bottom:8px">SECTIONS</div>
+      <div id="rsecs">
+        <div class="rsec" onclick="togSec(0)"><span>Executive Summary & Score</span><div style="display:flex;align-items:center;gap:8px"><span class="badge bg">INCLUDED</span><div class="chk on" id="chk0">✓</div></div></div>
+        <div class="rsec" onclick="togSec(1)"><span>BRSR → ISSB S2 Mapping</span><div style="display:flex;align-items:center;gap:8px"><span class="badge bg">INCLUDED</span><div class="chk on" id="chk1">✓</div></div></div>
+        <div class="rsec" onclick="togSec(2)"><span>Materiality Gap Register</span><div style="display:flex;align-items:center;gap:8px"><span class="badge bg">INCLUDED</span><div class="chk on" id="chk2">✓</div></div></div>
+        <div class="rsec" onclick="togSec(3)"><span>Carbon Credit Assessment</span><div style="display:flex;align-items:center;gap:8px"><span class="badge bg">INCLUDED</span><div class="chk on" id="chk3">✓</div></div></div>
+        <div class="rsec" onclick="togSec(4)"><span>Greenwash Heuristics</span><div style="display:flex;align-items:center;gap:8px"><span class="badge ba">OPTIONAL</span><div class="chk" id="chk4"></div></div></div>
+        <div class="rsec" onclick="togSec(5)"><span>Peer Benchmark</span><div style="display:flex;align-items:center;gap:8px"><span class="badge ba">OPTIONAL</span><div class="chk" id="chk5"></div></div></div>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:6px">
+        <button class="btn btn-p" onclick="genReport()" id="genbtn">GENERATE REPORT</button>
+        <button class="btn btn-d" onclick="clearRep()">CLEAR</button>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="ph"><span class="pl">Report Preview</span><span class="badge bb" id="fmt-badge">PDF MEMO</span></div>
+      <div class="term" id="repout" style="min-height:220px;max-height:400px"><span class="ac">▶ REPORT GENERATOR READY</span>
+<span class="in">  Configure sections → GENERATE REPORT</span><span class="cursor"></span></div>
+      <div style="margin-top:8px;display:flex;gap:6px">
+        <button class="btn btn-n" style="font-size:9px;padding:5px 10px" onclick="copyRep()">COPY</button>
+        <button class="btn btn-d" style="font-size:9px;padding:5px 10px" onclick="clearRep()">CLEAR</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /main -->
+
+<!-- SIDE PANEL -->
+<div class="side">
+  <div class="side-panel">
+    <div class="pl" style="margin-bottom:8px">Assurance Readiness Score</div>
+    <div class="gauge-wrap">
+      <svg width="170" height="105" viewBox="0 0 170 105">
+        <path d="M 15 98 A 70 70 0 0 1 155 98" fill="none" stroke="#2a3040" stroke-width="13" stroke-linecap="round"/>
+        <path id="garc" d="M 15 98 A 70 70 0 0 1 155 98" fill="none" stroke="#ffaa00" stroke-width="13" stroke-linecap="round" stroke-dasharray="220" stroke-dashoffset="132"/>
+        <text x="85" y="82" text-anchor="middle" font-family="IBM Plex Mono" font-size="28" font-weight="600" fill="#ffaa00" id="gnum">42</text>
+        <text x="85" y="98" text-anchor="middle" font-family="IBM Plex Mono" font-size="9" fill="#4a5a70" letter-spacing="2">/ 100</text>
+      </svg>
+    </div>
+    <div style="text-align:center;margin-bottom:10px"><span class="badge ba" id="gcat">HIGH RISK — CONDITIONAL USE ONLY</span></div>
+    <div>
+      <div class="bd-row"><span style="color:var(--text2)">Base</span><span>60</span></div>
+      <div class="bd-row"><span style="color:var(--text2)">Materiality Gaps ×2</span><span style="color:var(--red)">−20</span></div>
+      <div class="bd-row"><span style="color:var(--text2)">Net Zero Integrity</span><span style="color:var(--red)">−25</span></div>
+      <div class="bd-row"><span style="color:var(--text2)">Baseline Failure</span><span style="color:var(--red)">−15</span></div>
+      <div class="bd-row"><span style="color:var(--text2)">Leakage ×2</span><span style="color:var(--red)">−10</span></div>
+      <div class="bd-row"><span style="color:var(--text2)">Assurance Mismatch</span><span style="color:var(--red)">−15</span></div>
+      <div class="bd-row"><span style="color:var(--text2)">Ltd. Assurance S1+S2</span><span style="color:var(--green)">+5</span></div>
+      <div class="bd-row" style="border-bottom:none;padding-top:6px"><span style="color:var(--text);font-weight:500">Final Score</span><span style="color:var(--amber);font-weight:600" id="fscore">= 42</span></div>
+    </div>
+  </div>
+
+  <div class="side-panel">
+    <div class="pl" style="margin-bottom:8px">Sector Benchmark</div>
+    <div style="position:relative;height:120px">
+      <canvas id="bench-chart" role="img" aria-label="Benchmark bar chart">Bharat Steel 42, Sector Avg 54, ISSB Threshold 80, Best-in-class 91.</canvas>
+    </div>
+  </div>
+
+  <div class="side-panel">
+    <div class="pl" style="margin-bottom:8px">Sector Risk Profile</div>
+    <div class="rbar"><span style="width:100px;color:var(--text2)">S3 Exposure</span><div class="rtrack"><div class="rfill" style="width:95%;background:var(--red)"></div></div><span style="color:var(--red);width:55px;text-align:right;font-size:9px">CRITICAL</span></div>
+    <div class="rbar"><span style="width:100px;color:var(--text2)">Stranded Asset</span><div class="rtrack"><div class="rfill" style="width:72%;background:var(--amber)"></div></div><span style="color:var(--amber);width:55px;text-align:right;font-size:9px">HIGH</span></div>
+    <div class="rbar"><span style="width:100px;color:var(--text2)">Transition Risk</span><div class="rtrack"><div class="rfill" style="width:68%;background:var(--amber)"></div></div><span style="color:var(--amber);width:55px;text-align:right;font-size:9px">HIGH</span></div>
+    <div class="rbar"><span style="width:100px;color:var(--text2)">Physical Risk</span><div class="rtrack"><div class="rfill" style="width:44%;background:var(--accent2)"></div></div><span style="color:var(--accent2);width:55px;text-align:right;font-size:9px">MEDIUM</span></div>
+    <div class="rbar"><span style="width:100px;color:var(--text2)">Data Quality</span><div class="rtrack"><div class="rfill" style="width:78%;background:var(--amber)"></div></div><span style="color:var(--amber);width:55px;text-align:right;font-size:9px">HIGH</span></div>
+    <div class="rbar"><span style="width:100px;color:var(--text2)">Greenwash Prox.</span><div class="rtrack"><div class="rfill" style="width:70%;background:var(--amber)"></div></div><span style="color:var(--amber);width:55px;text-align:right;font-size:9px">HIGH</span></div>
+  </div>
+
+  <div class="side-panel">
+    <div class="pl" style="margin-bottom:8px">Agent Verdict</div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--text2);line-height:1.8">
+      <span style="color:var(--red)">▶</span> Score 42/100. Below threshold (≥80).<br>
+      <span style="color:var(--amber)">▶</span> Remediations: S3 Cat 11, base year restatement, REDD+ registry disclosure.<br>
+      <span style="color:var(--accent)">▶</span> Net Zero claim must not be cited without credit quality addendum.<br>
+      <span style="color:var(--red);font-weight:600">VERDICT: DO NOT INTEGRATE</span>
+    </div>
+  </div>
+</div><!-- /side -->
+</div><!-- /shell -->
+
+<!-- FOOTER -->
+<div class="foot">
+  <span class="foot-l">BRSR→ISSB S2 DATA QUALITY VALIDATOR · GURGAON NODE · AGENTS.MD v1.0</span>
+  <div class="foot-r">
+    <span class="foot-l">ENTITY: <span style="color:var(--amber)" id="fent">AWAITING</span></span>
+    <span class="foot-l">SCORE: <span style="color:var(--red)" id="fscr">—</span></span>
+    <span class="foot-l">VERDICT: <span style="color:var(--red)" id="fvrd">—</span></span>
+  </div>
+</div>
+
+<script>
+const SAMPLE = `{
+  "entity": "Bharat Steel Ltd.",
+  "fiscal_year": "FY2023-24",
+  "sector": "steel",
+  "scope1_mtco2e": 142850,
+  "scope2_market_mtco2e": 89200,
+  "scope3_disclosed": false,
+  "scope3_cat11_note": "Under assessment - methodology TBD",
+  "net_zero_claim": true,
+  "net_zero_target_year": 2050,
+  "offset_credits": {
+    "redd_plus_pct": 68,
+    "ifm_pct": 22,
+    "dac_pct": 10,
+    "registry_ids_disclosed": false
+  },
+  "base_year": 2020,
+  "third_party_assurance": "limited",
+  "assurance_scope": ["scope1","scope2"],
+  "sbt_validated": false,
+  "transition_plan_disclosed": false
+}`;
+
+const PEERS = [
+  {name:'Bharat Steel Ltd.',sector:'steel',score:42,s3cov:31,assurance:'LIMITED',sbt:false,greenwash:'ELEVATED',sel:true},
+  {name:'Tata Steel India',sector:'steel',score:78,s3cov:62,assurance:'REASONABLE',sbt:true,greenwash:'LOW'},
+  {name:'JSW Steel',sector:'steel',score:71,s3cov:55,assurance:'LIMITED',sbt:true,greenwash:'LOW'},
+  {name:'SAIL',sector:'steel',score:44,s3cov:28,assurance:'LIMITED',sbt:false,greenwash:'MODERATE'},
+  {name:'NTPC Ltd.',sector:'power',score:67,s3cov:48,assurance:'LIMITED',sbt:false,greenwash:'MODERATE'},
+  {name:'Adani Power',sector:'power',score:38,s3cov:18,assurance:'NONE',sbt:false,greenwash:'ELEVATED'},
+  {name:'Torrent Power',sector:'power',score:61,s3cov:42,assurance:'LIMITED',sbt:false,greenwash:'LOW'},
+  {name:'Power Grid Corp',sector:'power',score:59,s3cov:39,assurance:'LIMITED',sbt:false,greenwash:'LOW'},
+  {name:'UltraTech Cement',sector:'cement',score:74,s3cov:58,assurance:'REASONABLE',sbt:true,greenwash:'LOW'},
+  {name:'ACC Ltd.',sector:'cement',score:66,s3cov:51,assurance:'LIMITED',sbt:true,greenwash:'LOW'},
+  {name:'Shree Cement',sector:'cement',score:49,s3cov:33,assurance:'NONE',sbt:false,greenwash:'MODERATE'},
+  {name:'Dalmia Bharat',sector:'cement',score:55,s3cov:44,assurance:'LIMITED',sbt:false,greenwash:'LOW'},
+];
+
+// clock
+function tick(){
+  const n=new Date(),ist=new Date(n.getTime()+19800000);
+  const p=v=>String(v).padStart(2,'0');
+  document.getElementById('clock').textContent=`${p(ist.getUTCHours())}:${p(ist.getUTCMinutes())}:${p(ist.getUTCSeconds())} IST`;
+}
+setInterval(tick,1000);tick();
+
+// tabs
+function goTab(id){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.ntab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  const tabs=['overview','ingest','mapping','carbon','flags','trends','peers','report'];
+  document.querySelectorAll('.ntab')[tabs.indexOf(id)].classList.add('active');
+}
+
+// pips
+function makePips(elId, filled, total, cls){
+  const el=document.getElementById(elId);
+  if(!el)return;
+  el.innerHTML='';
+  for(let i=0;i<total;i++){
+    const d=document.createElement('div');
+    d.className='pip '+(i<filled?cls:'em');
+    el.appendChild(d);
+  }
+}
+makePips('p1',4,4,'hi');makePips('p2',4,4,'hi');makePips('p3',1,4,'lo');
+makePips('p4',0,4,'lo');makePips('p5',2,4,'me');makePips('p6',2,4,'me');
+makePips('p7',2,4,'me');makePips('p8',0,4,'lo');
+
+// drag/drop
+function dzOver(e){e.preventDefault();document.getElementById('dz').classList.add('over')}
+function dzLeave(){document.getElementById('dz').classList.remove('over')}
+function dzDrop(e){e.preventDefault();dzLeave();const f=e.dataTransfer.files[0];if(f){const r=new FileReader();r.onload=ev=>document.getElementById('jin').value=ev.target.result;r.readAsText(f);}}
+function readFile(e){const f=e.target.files[0];if(f){const r=new FileReader();r.onload=ev=>document.getElementById('jin').value=ev.target.result;r.readAsText(f);}}
+
+function loadSample(){document.getElementById('jin').value=SAMPLE;}
+function clearAll(){document.getElementById('jin').value='';document.getElementById('ename').textContent='AWAITING DATA';document.getElementById('slabel').textContent='UNCLASSIFIED';}
+function updSector(){const m={steel:'STEEL (BROWN)',power:'POWER (BROWN)',cement:'CEMENT (BROWN)'};document.getElementById('slabel').textContent=m[document.getElementById('ssel').value]||'UNCLASSIFIED';}
+
+function runVal(){
+  const raw=document.getElementById('jin').value.trim();
+  if(!raw){alert('Paste or load BRSR JSON first.');return;}
+  let d;
+  try{d=JSON.parse(raw);}catch(e){alert('Invalid JSON. Check syntax.');return;}
+  if(d.entity){document.getElementById('ename').textContent=d.entity.toUpperCase();document.getElementById('fent').textContent=d.entity.toUpperCase();}
+  if(d.sector){const m={steel:'STEEL (BROWN)',power:'POWER (BROWN)',cement:'CEMENT (BROWN)'};document.getElementById('slabel').textContent=m[d.sector]||d.sector.toUpperCase();}
+  const cr=d.offset_credits||{};
+  const redd=cr.redd_plus_pct||0;
+  let score=60,crit=0;
+  if(!d.scope3_disclosed){score-=20;crit+=2;}
+  if(d.net_zero_claim&&redd>40){score-=25;crit++;}
+  if(d.base_year&&d.base_year<=2020){score-=15;crit++;}
+  if(!cr.registry_ids_disclosed){score-=10;}
+  if(d.third_party_assurance==='limited'){score-=10;}
+  if(d.third_party_assurance&&d.third_party_assurance!=='none'){score+=5;}
+  if(d.sbt_validated){score+=8;}
+  score=Math.max(0,Math.min(100,score));
+  document.getElementById('sd').textContent=score;
+  document.getElementById('cf').textContent=crit;
+  document.getElementById('s3c').textContent=(d.scope3_disclosed?'65':'31')+'%';
+  document.getElementById('gwc').textContent=(redd>40?'3':'1')+'/6';
+  document.getElementById('s1v').textContent=(d.scope1_mtco2e||0).toLocaleString();
+  document.getElementById('s2v').textContent=(d.scope2_market_mtco2e||0).toLocaleString();
+  document.getElementById('s3v').textContent=d.scope3_disclosed?'PARTIAL':'ABSENT';
+  document.getElementById('fscr').textContent=score+'/100';
+  const v=score>=80?'READY':score>=60?'CONDITIONAL':score>=40?'HIGH RISK':'REJECT';
+  document.getElementById('fvrd').textContent=v;
+  const col=score>=80?'#00cc88':score>=60?'#ffaa00':'#ff4040';
+  document.getElementById('garc').setAttribute('stroke',col);
+  document.getElementById('garc').setAttribute('stroke-dashoffset',String(220-(score/100)*220));
+  document.getElementById('gnum').textContent=score;
+  document.getElementById('gnum').setAttribute('fill',col);
+  document.getElementById('fscore').textContent='= '+score;
+  document.getElementById('rb').textContent=v;
+  document.getElementById('gcat').textContent=v+' — '+score+'/100';
+  alert('Validation complete. Score: '+score+'/100 · '+v+'\n\nSwitching to Overview tab...');
+  goTab('overview');
+}
+
+// charts
+new Chart(document.getElementById('trend-chart').getContext('2d'),{
+  type:'line',
+  data:{labels:['FY20','FY21','FY22','FY23','FY24'],datasets:[
+    {label:'Scope 1',data:[110200,118400,125600,131900,142850],borderColor:'#ff4040',backgroundColor:'rgba(255,64,64,.05)',fill:true,tension:.3,borderWidth:2,pointBackgroundColor:'#ff4040',pointRadius:4},
+    {label:'Scope 2',data:[68100,72300,77800,83200,89200],borderColor:'#0099ff',backgroundColor:'rgba(0,153,255,.04)',fill:true,tension:.3,borderWidth:2,borderDash:[4,3],pointBackgroundColor:'#0099ff',pointRadius:4},
+    {label:'Intensity',data:[100,97,94,91,89],borderColor:'#00cc88',fill:false,tension:.3,borderWidth:2,borderDash:[2,4],pointBackgroundColor:'#00cc88',pointRadius:4,yAxisID:'y2'}
+  ]},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:'#1c2230',borderColor:'#3a4460',borderWidth:1,titleColor:'#c8d4e8',bodyColor:'#7a8fa8',titleFont:{family:'IBM Plex Mono',size:10},bodyFont:{family:'IBM Plex Mono',size:10}}},
+  scales:{x:{grid:{color:'rgba(42,48,64,.8)'},ticks:{color:'#7a8fa8',font:{family:'IBM Plex Mono',size:9}},border:{color:'#2a3040'}},y:{grid:{color:'rgba(42,48,64,.5)'},ticks:{color:'#7a8fa8',font:{family:'IBM Plex Mono',size:9},callback:v=>Math.round(v/1000)+'k'},border:{color:'#2a3040'},position:'left'},y2:{grid:{display:false},ticks:{color:'#00cc88',font:{family:'IBM Plex Mono',size:9},callback:v=>v.toFixed(0)},position:'right',border:{color:'#2a3040'},min:80,max:110}}}
+});
+
+new Chart(document.getElementById('bench-chart').getContext('2d'),{
+  type:'bar',
+  data:{labels:['Bharat St.','Sector Avg','ISSB Min','Best-in-class'],datasets:[{data:[42,54,80,91],backgroundColor:['#ff4040','#ffaa00','#00d4aa','#0099ff'],borderWidth:0,borderRadius:2}]},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' Score: '+c.raw+'/100'}}},scales:{x:{grid:{color:'rgba(42,48,64,.8)'},ticks:{color:'#7a8fa8',font:{family:'IBM Plex Mono',size:8}}},y:{min:0,max:100,grid:{color:'rgba(42,48,64,.5)'},ticks:{color:'#7a8fa8',font:{family:'IBM Plex Mono',size:8}}}}}
+});
+
+// peers
+function renderPeers(){
+  const sec=document.getElementById('psec').value;
+  const srt=document.getElementById('psort').value;
+  let data=PEERS.filter(p=>sec==='all'||p.sector===sec);
+  if(srt==='greenwash') data.sort((a,b)=>['ELEVATED','MODERATE','LOW'].indexOf(a.greenwash)-['ELEVATED','MODERATE','LOW'].indexOf(b.greenwash));
+  else data.sort((b,a)=>a[srt]-b[srt]);
+  const aCls={REASONABLE:'tg',LIMITED:'ta',NONE:'tr'};
+  const gCls={ELEVATED:'tr',MODERATE:'ta',LOW:'tg'};
+  const sCls=s=>s>=75?'sp-g':s>=55?'sp-a':'sp-r';
+  document.getElementById('ptbody').innerHTML=data.map(p=>`
+    <tr class="${p.sel?'sel':''}">
+      <td style="color:${p.sel?'var(--accent)':'var(--text)'}">${p.name}${p.sel?' ◀':''}</td>
+      <td style="color:var(--text2)">${p.sector.toUpperCase()}</td>
+      <td><span class="spill ${sCls(p.score)}">${p.score}</span></td>
+      <td style="color:var(--text2)">${p.s3cov}%</td>
+      <td><span class="tag ${aCls[p.assurance]||'ta'}">${p.assurance}</span></td>
+      <td><span class="tag ${p.sbt?'tg':'tr'}">${p.sbt?'YES':'NO'}</span></td>
+      <td><span class="tag ${gCls[p.greenwash]||'ta'}">${p.greenwash}</span></td>
+      <td>${p.score>=75?'<span class="badge bg">READY</span>':p.score>=55?'<span class="badge ba">CONDITIONAL</span>':'<span class="badge br">HIGH RISK</span>'}</td>
+    </tr>`).join('');
+  document.getElementById('pcnt').textContent=data.length+' entities';
+}
+renderPeers();
+
+// report
+const secs=[true,true,true,true,false,false];
+function togSec(i){secs[i]=!secs[i];const c=document.getElementById('chk'+i);c.classList.toggle('on',secs[i]);c.textContent=secs[i]?'✓':'';}
+let fmt='pdf';
+function setFmt(f){
+  fmt=f;
+  ['pdf','json','csv'].forEach(x=>{const b=document.getElementById('fb-'+x);b.className='btn '+(x===f?'btn-b':'btn-n');b.style.fontSize='9px';b.style.padding='5px 10px';});
+  document.getElementById('fmt-badge').textContent={pdf:'PDF MEMO',json:'JSON EXPORT',csv:'CSV FLAGS'}[f];
+}
+function genReport(){
+  const btn=document.getElementById('genbtn');btn.disabled=true;btn.textContent='GENERATING...';
+  setTimeout(()=>{
+    const out=document.getElementById('repout');
+    let c='';
+    if(fmt==='pdf'){
+      c=`<span class="ac">▶ INSTITUTIONAL ESG MEMO — S&P WORKFLOW FORMAT</span>
+<span class="in">  BRSR→ISSB S2 Data Quality Validator · Gurgaon Node</span>
+<span style="color:var(--text3)">  ────────────────────────────────────────────</span>
+<span class="ac">  ENTITY:</span>      <span style="color:var(--text)">Bharat Steel Ltd.</span>
+<span class="ac">  FISCAL YEAR:</span> <span style="color:var(--text)">FY2023-24</span>
+<span class="ac">  SECTOR:</span>      <span class="wa">Steel (Brown — High Transition Risk)</span>
+<span class="ac">  SCORE:</span>       <span class="er">42/100 · HIGH RISK</span>
+<span class="ac">  VERDICT:</span>     <span class="er">DO NOT INTEGRATE</span>
+<span style="color:var(--text3)">  ────────────────────────────────────────────</span>`;
+      if(secs[0]) c+=`\n<span class="wa">1. EXECUTIVE SUMMARY</span>
+<span style="color:var(--text2)">   Score 42/100 — fails 80-pt threshold by 38 points.</span>
+<span style="color:var(--text2)">   4 critical flags. 3/6 greenwash heuristics triggered.</span>
+<span style="color:var(--text2)">   Net Zero 2050 claim: INTEGRITY COMPROMISED.</span>`;
+      if(secs[1]) c+=`\n<span class="wa">2. BRSR → ISSB S2 MAPPING</span>
+<span class="er">   S2 para 29(c): CRITICAL GAP — Cat 11 &amp; Cat 15 absent.</span>
+<span class="wa">   S2 para 10-22: PARTIAL — No scenario analysis.</span>
+<span class="wa">   S2 para 33: AMBIGUITY — No interim milestones.</span>`;
+      if(secs[2]) c+=`\n<span class="wa">3. MATERIALITY GAP REGISTER</span>
+<span class="er">   [CRITICAL] Cat 11 Use of Sold Products: ABSENT</span>
+<span class="er">   [CRITICAL] Cat 15 Financed Emissions: ABSENT</span>
+<span class="wa">   [HIGH] GHG Intensity Boundary: UNDISCLOSED</span>`;
+      if(secs[3]) c+=`\n<span class="wa">4. CARBON CREDIT ASSESSMENT</span>
+<span class="er">   REDD+ (Tier 4): 68% — FAILS 40% threshold. −25 pts.</span>
+<span class="wa">   IFM (Tier 3): 22% — Leakage unquantified.</span>
+<span class="ok">   DAC (Tier 1): 10% — Approved. Must increase.</span>`;
+      if(secs[4]) c+=`\n<span class="wa">5. GREENWASH HEURISTICS</span>
+<span class="er">   [TRIGGERED] Cherry-picking base year (FY2020)</span>
+<span class="er">   [TRIGGERED] Scope 3 avoidance</span>
+<span class="er">   [TRIGGERED] Credit quality opacity</span>
+<span class="ok">   [CLEAR] Intensity laundering, target creep, offset primary</span>`;
+      if(secs[5]) c+=`\n<span class="wa">6. PEER BENCHMARK</span>
+<span style="color:var(--text2)">   Tata Steel 78 · JSW Steel 71 · SAIL 44 · Bharat Steel 42</span>
+<span style="color:var(--text2)">   Ranked 4th of 4 in Indian steel universe.</span>`;
+      c+=`\n<span style="color:var(--text3)">  ────────────────────────────────────────────</span>
+<span style="color:var(--text3)">  Generated: ${new Date().toISOString()} · AGENTS.MD v1.0</span>`;
+    } else if(fmt==='json'){
+      const obj={entity:'Bharat Steel Ltd.',fy:'FY2023-24',score:42,verdict:'DO_NOT_INTEGRATE',flags:['MATERIALITY_GAP_CRITICAL_CAT11','MATERIALITY_GAP_CRITICAL_CAT15','NET_ZERO_INTEGRITY_RISK','BASELINE_INTEGRITY_FAILURE','LEAKAGE_UNQUANTIFIED'],greenwash_triggered:3,scope3_coverage_pct:31,credit_portfolio:{redd_pct:68,ifm_pct:22,dac_pct:10},assurance:'LIMITED',sbt:false,generated:new Date().toISOString()};
+      c=`<span class="ac">▶ JSON EXPORT</span>\n<span class="ok">${JSON.stringify(obj,null,2)}</span>`;
+    } else {
+      c=`<span class="ac">▶ CSV FLAG EXPORT</span>
+<span class="ok">flag_code,severity,score_impact,description</span>
+<span style="color:var(--text2)">MATERIALITY_GAP_CRITICAL,CRITICAL,-10,Scope 3 Cat 11 absent</span>
+<span style="color:var(--text2)">MATERIALITY_GAP_CRITICAL,CRITICAL,-10,Scope 3 Cat 15 absent</span>
+<span style="color:var(--text2)">NET_ZERO_INTEGRITY_RISK,CRITICAL,-25,68% REDD+ avoidance credits</span>
+<span style="color:var(--text2)">BASELINE_INTEGRITY_FAILURE,CRITICAL,-15,FY2020 COVID trough base year</span>
+<span style="color:var(--text2)">LEAKAGE_UNQUANTIFIED,HIGH,-10,No REDD+ registry IDs</span>
+<span style="color:var(--text2)">ASSURANCE_SCOPE_MISMATCH,HIGH,-15,Limited not Reasonable</span>
+<span style="color:var(--text2)">TCFD_MISALIGNMENT,HIGH,0,No physical risk scenarios</span>
+<span style="color:var(--text2)">AMBIGUITY_FLAG,MEDIUM,0,No 2030 interim milestone</span>`;
+    }
+    out.innerHTML=c;out.scrollTop=0;
+    btn.disabled=false;btn.textContent='GENERATE REPORT';
+  },800);
+}
+function copyRep(){const el=document.getElementById('repout');navigator.clipboard.writeText(el.innerText||el.textContent).then(()=>{const b=event.target;b.textContent='COPIED!';setTimeout(()=>b.textContent='COPY',1500);});}
+function clearRep(){document.getElementById('repout').innerHTML='<span class="ac">▶ CLEARED</span><span class="cursor"></span>';}
+</script>
+</body>
+</html>
