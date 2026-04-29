@@ -488,7 +488,7 @@ select:focus{outline:none;border-color:var(--accent2)}
     </div>
     <div style="text-align:center;margin-bottom:10px"><span class="badge ba" id="gcat">HIGH RISK — CONDITIONAL USE ONLY</span></div>
     <div>
-      <div class="bd-row"><span style="color:var(--text2)">Base</span><span>60</span></div>
+      <div class="bd-row"><span style="color:var(--text2)">Base</span><span>75</span></div>
       <div class="bd-row"><span style="color:var(--text2)">Materiality Gaps ×2</span><span style="color:var(--red)">−20</span></div>
       <div class="bd-row"><span style="color:var(--text2)">Net Zero Integrity</span><span style="color:var(--red)">−25</span></div>
       <div class="bd-row"><span style="color:var(--text2)">Baseline Failure</span><span style="color:var(--red)">−15</span></div>
@@ -628,7 +628,7 @@ function runVal(){
   if(d.sector){const m={steel:'STEEL (BROWN)',power:'POWER (BROWN)',cement:'CEMENT (BROWN)'};document.getElementById('slabel').textContent=m[d.sector]||d.sector.toUpperCase();}
   const cr=d.offset_credits||{};
   const redd=cr.redd_plus_pct||0;
-  let score=60,crit=0;
+  let score=75,crit=0;
   if(!d.scope3_disclosed){score-=20;crit+=2;}
   if(d.net_zero_claim&&redd>40){score-=25;crit++;}
   if(d.base_year&&d.base_year<=2020){score-=15;crit++;}
