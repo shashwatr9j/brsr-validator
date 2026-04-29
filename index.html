@@ -633,9 +633,10 @@ function runVal(){
   if(d.net_zero_claim&&redd>40){score-=25;crit++;}
   if(d.base_year&&d.base_year<=2020){score-=15;crit++;}
   if(!cr.registry_ids_disclosed){score-=10;}
-  if(d.third_party_assurance==='limited'){score-=10;}
-  if(d.third_party_assurance&&d.third_party_assurance!=='none'){score+=5;}
+  if(d.third_party_assurance==='reasonable'){score+=15;}
+  else if(d.third_party_assurance==='limited'){score+=3;}
   if(d.sbt_validated){score+=8;}
+  if(d.transition_plan_disclosed){score+=7;}
   score=Math.max(0,Math.min(100,score));
   document.getElementById('sd').textContent=score;
   document.getElementById('cf').textContent=crit;
